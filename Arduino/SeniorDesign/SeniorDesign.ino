@@ -43,5 +43,7 @@ void blinkByte(int byteRead)
       digitalWrite(led, LOW);
       delay(delayTime);
     }
+    
+    delay(delayTime);
   }
 }
