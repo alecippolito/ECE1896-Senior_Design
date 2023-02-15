@@ -14,15 +14,19 @@ void loop()
 {
   if(Serial.available() > 0)
   {
-    //Serial.write(Serial.read());
-    blinkByte(Serial.read());
-
-    Serial.flush();
+    incoming = Serial.read();
+    blinkByte(incoming);
+    Serial.write(incoming);
   }
 }
 
 void blinkByte(int byteRead)
 {
+  if(byteRead == 0)
+  {
+    return;
+  }
+  
   for(int i=0; i<8; i++)
   {
     if(bitRead(byteRead, i) == 1)
@@ -44,6 +48,6 @@ void blinkByte(int byteRead)
       delay(delayTime);
     }
     
-    delay(delayTime);
+    delay(delayTime / 2);
   }
 }
