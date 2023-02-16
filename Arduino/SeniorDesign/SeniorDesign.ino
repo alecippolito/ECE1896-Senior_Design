@@ -1,23 +1,30 @@
 
-int led = 8;
+int led = 8, button = 9;
 int incoming = 0;
 int delayTime = 1000;
 
 void setup()
 {
   pinMode(led, OUTPUT);
+  pinMode(button, INPUT);
 
   Serial.begin(9600);
 }
 
 void loop()
 {
+  if(digitalRead(button) == 1)
+  {
+    Serial.write("A");
+  }  
+
+  /*
   if(Serial.available() > 0)
   {
     incoming = Serial.read();
     blinkByte(incoming);
     Serial.write(incoming);
-  }
+  }*/
 }
 
 void blinkByte(int byteRead)
