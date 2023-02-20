@@ -13,18 +13,16 @@ void setup()
 
 void loop()
 {
-  if(digitalRead(button) == 1)
-  {
-    Serial.write("A");
-  }  
-
-  /*
   if(Serial.available() > 0)
   {
     incoming = Serial.read();
     blinkByte(incoming);
     Serial.write(incoming);
-  }*/
+  }
+  else if(digitalRead(button) == 1)
+  {
+    Serial.write("A");
+  }
 }
 
 void blinkByte(int byteRead)
