@@ -4,8 +4,6 @@ int led = 8, button = 9;
 int incoming = 0;
 int delayTime = 500;
 
-int up;
-int down;
 int out = 10;
 
 void setup()
@@ -17,6 +15,7 @@ void setup()
   pinMode(out,OUTPUT);
   Timer1.initialize(1);
   Timer1.pwm(out,512);
+  Timer1.stop();
 
   Serial.begin(9600);
 }
@@ -28,7 +27,8 @@ void loop()
   {
     incoming = Serial.read();
     //Serial.write(incoming);
-    blinkByte(incoming);
+    //blinkByte(incoming);
+    pwmByte(incoming);
   }
   // Write to PC
   else if(digitalRead(button) == 1)
@@ -37,9 +37,6 @@ void loop()
     Serial.flush();
     delay(delayTime);
   }
-
-  //analogWrite(out,1);
-  //analogWrite(out,0);
 }
 
 void blinkByte(int byteRead)
@@ -70,6 +67,37 @@ void blinkByte(int byteRead)
       delay(delayTime);
     }
     
+    delay(delayTime / 2);
+  }
+}
+
+void pwmByte(int byteRead)
+{
+  if(byteRead == 0)
+  {
+    return;
+  }
+  
+  for(int i=0; i<8; i++)
+  {
+    if(bitRead(byteRead, i) == 1)
+    {
+      Timer1.setPeriod(1);
+      Timer1.start();
+      //delay(delayTime);
+      Timer1.stop();
+      //delay(delayTime);
+    }
+    else
+    {
+      Timer1.setPeriod(2);
+      Timer1.start();
+      //delay(delayTime);
+      Timer1.stop();
+      //delay(delayTime);
+    }
+
+    digitalWrite(led, HIGH);
     delay(delayTime / 2);
   }
 }
