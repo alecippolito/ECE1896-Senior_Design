@@ -8,9 +8,9 @@
 #include <TimerOne.h>
 
 int led = 8, button = 9;
-int delayTime = 500;
+int delayTime = 50;
 
-int in = 5;
+int in = A0;
 int out = 10;
 int interruptPin = 2;
 uint8_t incoming = 0;
@@ -18,18 +18,12 @@ uint8_t receivedBits = 0;
 
 bool o = false;
 
-int highFreq = 20; // 50KHz square wave from timer 1
-int lowFreq = 40; // 25KHz square wave from timer 1
+int highFreq = 5; // 50KHz square wave from timer 1
+int lowFreq = 8; // 25KHz square wave from timer 1
 
-int timer2Freq = 20000;
+int timer2Freq = 10;
 
 byte data = 0;
-
-void timerHandler()
-{
-  digitalWrite(led, o);
-  o = !o;
-}
 
 void setup()
 {  
@@ -47,11 +41,18 @@ void setup()
   Timer1.pwm(out, 512);
   Timer1.stop();
 
-  // Setup Timer2 for 
+  // Setup Timer2 for transmit/receive operations:
   ITimer2.init();
-  ITimer2.attachInterrupt(timer2Freq, timerHandler);
+  //ITimer2.attachInterrupt(timer2Freq, timerHandler);
+  //ITimer2.attachInterrupt(timer2Freq, interruptReceive);
 
   Serial.begin(9600);
+}
+
+void timerHandler()
+{
+  digitalWrite(led, o);
+  o = !o;
 }
 
 void loop()
@@ -63,13 +64,6 @@ void loop()
     //Serial.write(incoming);
     //blinkByte(incoming);
     pwmByte(incoming);
-  }
-  // Write to PC
-  else if (digitalRead(button) == 1)
-  {
-    Serial.write("A");
-    Serial.flush();
-    delay(delayTime);
   }
 }
 
@@ -146,7 +140,7 @@ void interruptReceive()
 {
   byte holder;
   
-  if(digitalRead(in) > 512)
+  if(analogRead(in) > 512)
   {
     //digitalWrite(led, HIGH);
     holder = 1;
@@ -167,5 +161,6 @@ void interruptReceive()
   {
     receivedBits = 0;
     Serial.write(data);
+    Serial.flush();
   }
 }
