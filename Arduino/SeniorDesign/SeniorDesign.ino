@@ -8,20 +8,20 @@
 #include <TimerOne.h>
 
 int led = 8, button = 9;
-int delayTime = 50;
+int delayTime = 500;
 
 int in = A0;
 int out = 10;
 int interruptPin = 2;
 uint8_t incoming = 0;
 uint8_t receivedBits = 0;
-
+     
 bool o = false;
 
-int highFreq = 5; // 50KHz square wave from timer 1
-int lowFreq = 8; // 25KHz square wave from timer 1
+int highFreq = 20; // 50KHz square wave from timer 1
+int lowFreq = 40; // 25KHz square wave from timer 1
 
-int timer2Freq = 10;
+int timer2Freq = 1000;
 
 byte data = 0;
 
@@ -44,7 +44,7 @@ void setup()
   // Setup Timer2 for transmit/receive operations:
   ITimer2.init();
   //ITimer2.attachInterrupt(timer2Freq, timerHandler);
-  //ITimer2.attachInterrupt(timer2Freq, interruptReceive);
+  ITimer2.attachInterrupt(timer2Freq, interruptReceive);
 
   Serial.begin(9600);
 }
