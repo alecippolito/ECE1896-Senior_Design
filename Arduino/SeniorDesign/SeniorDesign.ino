@@ -18,8 +18,11 @@ uint8_t receivedBits = 0;
      
 bool o = false;
 
+//int highFreq = 41; // 50KHz square wave from timer 1
 int highFreq = 20; // 50KHz square wave from timer 1
+//int lowFreq = 62; // 25KHz square wave from timer 1
 int lowFreq = 40; // 25KHz square wave from timer 1
+int standbyFreq = 100;
 
 int timer2Freq = 1000;
 
@@ -37,14 +40,14 @@ void setup()
   
   // Setup PWM pin based on 1MHz timer1 for transmitter:
   pinMode(out, OUTPUT);
-  Timer1.initialize(100000);
+  Timer1.initialize(standbyFreq);
   Timer1.pwm(out, 512);
-  Timer1.stop();
+  //Timer1.stop();
 
   // Setup Timer2 for transmit/receive operations:
   ITimer2.init();
   //ITimer2.attachInterrupt(timer2Freq, timerHandler);
-  ITimer2.attachInterrupt(timer2Freq, interruptReceive);
+  //ITimer2.attachInterrupt(timer2Freq, interruptReceive);
 
   Serial.begin(9600);
 }
@@ -65,6 +68,7 @@ void loop()
     //blinkByte(incoming);
     pwmByte(incoming);
   }
+
 }
 
 void blinkByte(uint8_t byteRead)
@@ -113,9 +117,9 @@ void pwmByte(uint8_t byteRead)
       Timer1.setPeriod(highFreq);
       Timer1.setPwmDuty(out, 512);
       
-      Timer1.start();
+      //Timer1.start();
       delay(delayTime);
-      Timer1.stop();
+      //Timer1.stop();
       delay(delayTime);
     }
     else
@@ -123,9 +127,9 @@ void pwmByte(uint8_t byteRead)
       Timer1.setPeriod(lowFreq);
       Timer1.setPwmDuty(out, 512);
 
-      Timer1.start();
+      //Timer1.start();
       delay(delayTime);
-      Timer1.stop();
+      //Timer1.stop();
       delay(delayTime);
     }
 
@@ -134,6 +138,9 @@ void pwmByte(uint8_t byteRead)
     digitalWrite(led, LOW);
     delay(delayTime / 2);
   }
+
+  Timer1.setPeriod(standbyFreq);
+  Timer1.setPwmDuty(out, 512);
 }
 
 void interruptReceive()
@@ -162,5 +169,6 @@ void interruptReceive()
     receivedBits = 0;
     Serial.write(data);
     Serial.flush();
+    data = 0;
   }
 }
