@@ -1,0 +1,10 @@
+C:\Users\ajipp\source\repos\Communication\bin\Debug\Communication.exe.config
+C:\Users\ajipp\source\repos\Communication\bin\Debug\Communication.exe
+C:\Users\ajipp\source\repos\Communication\bin\Debug\Communication.pdb
+C:\Users\ajipp\source\repos\Communication\obj\Debug\Communication.csproj.AssemblyReference.cache
+C:\Users\ajipp\source\repos\Communication\obj\Debug\Communication.Properties.Resources.resources
+C:\Users\ajipp\source\repos\Communication\obj\Debug\Communication.csproj.GenerateResource.cache
+C:\Users\ajipp\source\repos\Communication\obj\Debug\Communication.csproj.CoreCompileInputs.cache
+C:\Users\ajipp\source\repos\Communication\obj\Debug\Communication.exe
+C:\Users\ajipp\source\repos\Communication\obj\Debug\Communication.pdb
+C:\Users\ajipp\source\repos\Communication\obj\Debug\Communication.Form1.resources
