@@ -15,7 +15,7 @@ int delayTime = 250;
 bool delayEnable = false, startFlagOverride = false;
 
 uint8_t incoming = 0, outgoing = 0, transmittedBits = 0, receivedBits = 0;
-bool transmitFlag = false, receiveFlag = true, oFlag = false, startFlag = false;
+bool transmitFlag = false, receiveFlag = false, newTransmission = false, startFlag = false;
 bool o = false;
 
 // Hardware Timer 1 frequency values:
@@ -25,8 +25,8 @@ int lowFreq = 62; // 16KHz square wave
 //int lowFreq = 40; // 25KHz square wave
 int standbyFreq = 100; // 10KHz square wave
 
-// Hardware Timer 2 frequency values:
-int interruptFreq = 1;
+// Hardware Timer 2 frequency value:
+int interruptFreq = 10000;
 
 void setup()
 {
@@ -57,12 +57,10 @@ void timerHandler()
 void loop()
 {
   // Read from PC
-  if (Serial.available() > 0)
+  if (Serial.available() > 0 && (!newTransmission || transmittedBits == 0))
   {
     incoming = Serial.read();
-    //Serial.write(incoming);
-    //blinkByte(incoming);
-    //pwmByte(incoming);
+    newTransmission = true;
   }
 
   if (transmitFlag)
@@ -71,18 +69,11 @@ void loop()
     transmitFlag = false;
   }
 
-  if (receiveFlag)
+  /*if (receiveFlag)
   {
     receiveBit();
     receiveFlag = false;
-  }
-
-  /*if(oFlag)
-    {
-    digitalWrite(led, o);
-    o = !o;
-    oFlag = false;
-    }*/
+  }*/
 }
 
 void blinkByte(uint8_t byteRead)
@@ -158,15 +149,16 @@ void doDelay()
 }
 
 void transmitBit()
-{
-  if (incoming == 0)
+{  
+  if(incoming == 0)
   {
     return;
   }
 
-  if(incoming == startByte)
+  if(newTransmission)
   {
     transmittedBits = 0;
+    receivedBits = 0;
   }
 
   if (bitRead(incoming, transmittedBits) == 1)
@@ -196,14 +188,14 @@ void transmitBit()
     doDelay();
   }
 
-  Serial.write(incoming);
-
   if (transmittedBits < 7)
   {
+    newTransmission = false;
     transmittedBits++;
   }
   else
   {
+    Serial.write(incoming);
     transmittedBits = 0;
     incoming = 0;
 
@@ -227,23 +219,23 @@ void receiveBit()
     holder = 0;
   }
 
-  Serial.write(holder);
+  //Serial.write(holder);
 
-  if(!startFlag || startFlagOverride)
+  if(startFlag)
+  {
+    outgoing |= holder << receivedBits;
+  }
+  else
   {
     outgoing <<= 1;
     outgoing += holder;
   }
-  else
-  {
-    outgoing |= holder << receivedBits;
-  }
 
-  Serial.write(outgoing);
+  //Serial.write(outgoing);
 
   if(startFlag)
   {
-    if (receivedBits < 8) receivedBits++;
+    if (receivedBits < 7) receivedBits++;
     else
     {
       if(outgoing != 0)
@@ -269,5 +261,4 @@ void interruptHandler()
 {
   transmitFlag = true;
   receiveFlag = true;
-  oFlag = true;
 }
