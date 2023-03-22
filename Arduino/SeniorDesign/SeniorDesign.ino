@@ -8,14 +8,14 @@
 #include <TimerOne.h>
 
 int led = 8, receiverIn = A0, transmitterOut = 10;
-uint8_t startByte = 1, endByte;
+uint8_t startByte = 1, endByte = 4, charDelay = 10;
 int outputTest = 9;
 
 int delayTime = 250;
-bool delayEnable = false, startFlagOverride = false;
+bool delayEnable = false, startFlagOverride = true;
 
 uint8_t incoming = 0, outgoing = 0, transmittedBits = 0, receivedBits = 0;
-bool transmitFlag = false, receiveFlag = false, newTransmission = false, startFlag = false;
+bool transmitFlag = false, receiveFlag = false, newTransmission = false, newReception = false, startFlag = false;
 bool o = false;
 
 // Hardware Timer 1 frequency values:
@@ -69,11 +69,11 @@ void loop()
     transmitFlag = false;
   }
 
-  /*if (receiveFlag)
+  if (receiveFlag)
   {
     receiveBit();
     receiveFlag = false;
-  }*/
+  }//*/
 }
 
 void blinkByte(uint8_t byteRead)
@@ -149,16 +149,19 @@ void doDelay()
 }
 
 void transmitBit()
-{  
+{
+  delayMicroseconds(charDelay);
   if(incoming == 0)
   {
     return;
   }
 
+  //Serial.write(incoming);
+
   if(newTransmission)
   {
     transmittedBits = 0;
-    receivedBits = 0;
+    if(startFlagOverride) receivedBits = 0;
   }
 
   if (bitRead(incoming, transmittedBits) == 1)
@@ -195,7 +198,7 @@ void transmitBit()
   }
   else
   {
-    Serial.write(incoming);
+    //Serial.write(incoming);
     transmittedBits = 0;
     incoming = 0;
 
@@ -208,32 +211,70 @@ void transmitBit()
 
 void receiveBit()
 {
-  uint8_t holder;
+  delayMicroseconds(charDelay);
+  uint8_t votes = 5, carry;
+  float holder = 0;
 
-  if (analogRead(receiverIn) > 512)
+  for(int i=0; i<votes; i++)
   {
-    holder = 1;
+    if (analogRead(receiverIn) > 512)
+    {
+      holder += 1;
+    }
+    else
+    {
+      holder += 0;
+    }
+  }
+
+  holder /= votes;
+
+  if(startFlag || startFlagOverride)
+  {
+    if(holder > 0.5) 
+    {
+      outgoing |= 1 << receivedBits;
+      carry = 1;
+    }
+    else
+    {
+      outgoing |= 0 << receivedBits;
+      carry = 0;
+    }
   }
   else
   {
-    holder = 0;
+    if(holder > 0.5)
+    {
+      outgoing <<= 1;
+      outgoing += 1;
+      carry = 1;
+    }
+    else
+    {
+      outgoing <<= 1;
+      outgoing += 0;
+      carry = 0;
+    }
   }
 
-  //Serial.write(holder);
+  //if(outgoing !=0) Serial.write(carry);
 
-  if(startFlag)
+  if(outgoing !=0 && !newReception) newReception = true;
+  else if(outgoing == 0 && newReception) newReception = false;
+
+  if(outgoing == startByte && !startFlag)
   {
-    outgoing |= holder << receivedBits;
+    startFlag = true;
+    receivedBits = 0;
+    outgoing = 0;
   }
-  else
+  else if(outgoing == endByte && startFlag)
   {
-    outgoing <<= 1;
-    outgoing += holder;
+    startFlag = false;
   }
 
-  //Serial.write(outgoing);
-
-  if(startFlag)
+  if(startFlag || newReception)
   {
     if (receivedBits < 7) receivedBits++;
     else
@@ -241,19 +282,11 @@ void receiveBit()
       if(outgoing != 0)
       {
         Serial.write(outgoing);
-        Serial.flush();
       }
   
       receivedBits = 0;
       outgoing = 0;
     } 
-  }
-
-  if(outgoing == startByte && !startFlag)
-  {
-    startFlag = true;
-    receivedBits = 0;
-    outgoing = 0;
   }
 }
 
