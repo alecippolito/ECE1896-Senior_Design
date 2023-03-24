@@ -8,11 +8,11 @@
 #include <TimerOne.h>
 
 int led = 8, receiverIn = A0, transmitterOut = 10;
-uint8_t startByte = 1, endByte = 4, charDelay = 10;
+uint8_t startByte = 'A', endByte = 'C', charDelay = 20;
 int outputTest = 9;
 
 int delayTime = 250;
-bool delayEnable = false, startFlagOverride = true;
+bool delayEnable = false;
 
 uint8_t incoming = 0, outgoing = 0, transmittedBits = 0, receivedBits = 0;
 bool transmitFlag = false, receiveFlag = false, newTransmission = false, newReception = false, startFlag = false;
@@ -161,7 +161,6 @@ void transmitBit()
   if(newTransmission)
   {
     transmittedBits = 0;
-    if(startFlagOverride) receivedBits = 0;
   }
 
   if (bitRead(incoming, transmittedBits) == 1)
@@ -229,7 +228,7 @@ void receiveBit()
 
   holder /= votes;
 
-  if(startFlag || startFlagOverride)
+  if(startFlag)
   {
     if(holder > 0.5) 
     {
@@ -258,10 +257,8 @@ void receiveBit()
     }
   }
 
-  //if(outgoing !=0) Serial.write(carry);
-
-  if(outgoing !=0 && !newReception) newReception = true;
-  else if(outgoing == 0 && newReception) newReception = false;
+  //if(outgoing !=0 && !newReception) newReception = true;
+  //else if(outgoing == 0 && newReception) newReception = false;
 
   if(outgoing == startByte && !startFlag)
   {
@@ -274,19 +271,26 @@ void receiveBit()
     startFlag = false;
   }
 
-  if(startFlag || newReception)
+  if(startFlag)
   {
-    if (receivedBits < 7) receivedBits++;
+    if(outgoing != startFlag)
+    {
+      if (receivedBits < 7) receivedBits++;
+      else
+      {
+        if(outgoing != 0)
+        {
+          Serial.write(outgoing);
+        }
+    
+        receivedBits = 0;
+        outgoing = 0;
+      }
+    }
     else
     {
-      if(outgoing != 0)
-      {
-        Serial.write(outgoing);
-      }
-  
-      receivedBits = 0;
-      outgoing = 0;
-    } 
+      Serial.write(outgoing);
+    }
   }
 }
 
