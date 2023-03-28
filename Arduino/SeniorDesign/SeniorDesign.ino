@@ -23,7 +23,6 @@ int highFreq = 41; // 24KHz square wave
 //int highFreq = 20; // 50KHz square wave
 int lowFreq = 62; // 16KHz square wave
 //int lowFreq = 40; // 25KHz square wave
-int standbyFreq = 100; // 10KHz square wave
 
 // Hardware Timer 2 frequency value:
 int interruptFreq = 20000;
