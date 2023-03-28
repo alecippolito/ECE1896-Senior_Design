@@ -35,9 +35,8 @@ void setup()
 
   // Setup PWM pin based on 1MHz timer1 for transmitter:
   pinMode(transmitterOut, OUTPUT);
-  Timer1.initialize(standbyFreq);
+  Timer1.initialize(lowFreq);
   Timer1.pwm(transmitterOut, 512);
-  //Timer1.stop();
 
   // Setup Timer2 for transmit/receive operations:
   ITimer2.init();
@@ -140,7 +139,7 @@ void transmitBit()
     transmittedBits = 0;
     incoming = 0;
 
-    Timer1.setPeriod(standbyFreq);
+    Timer1.setPeriod(lowFreq);
     Timer1.setPwmDuty(transmitterOut, 512);
 
     digitalWrite(outputTest, false);
@@ -297,6 +296,6 @@ void pwmByte(uint8_t byteRead)
     doDelay();
   }
 
-  Timer1.setPeriod(standbyFreq);
+  Timer1.setPeriod(lowFreq);
   Timer1.setPwmDuty(transmitterOut, 512);
 }
