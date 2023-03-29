@@ -8,7 +8,7 @@
 #include <TimerOne.h>
 
 int led = 8, receiverIn = A0, transmitterOut = 10;
-uint8_t charDelay = 20, comma = 255;
+uint8_t charDelay = 20, comma = 1, errorChance = 1;
 int outputTest = 9;
 
 int delayTime = 250;
@@ -82,14 +82,12 @@ void transmitBit()
     return;
   }
 
-  //Serial.write(incoming);
-
   if(newTransmission)
   {
     transmittedBits = 0;
   }
 
-  if(newTransmission || transmittedBits < 8)
+  if(newTransmission || transmittedBits < 1)
   {
     Timer1.setPeriod(highFreq);
     Timer1.setPwmDuty(transmitterOut, 512);
@@ -98,7 +96,7 @@ void transmitBit()
 
     doDelay();
   }
-  else if (bitRead(incoming, transmittedBits-8) == 1)
+  else if (bitRead(incoming, transmittedBits-1) == 1)
   {
     Timer1.setPeriod(highFreq);
     Timer1.setPwmDuty(transmitterOut, 512);
@@ -128,7 +126,7 @@ void transmitBit()
     doDelay();
   }
 
-  if (transmittedBits < 15)
+  if (transmittedBits < 8)
   {
     newTransmission = false;
     transmittedBits++;
@@ -148,7 +146,6 @@ void transmitBit()
 
 void receiveBit()
 {
-  //delayMicroseconds(charDelay);
   uint8_t votes = 5, carry;
   float holder = 0;
 
@@ -170,40 +167,38 @@ void receiveBit()
   {
     if(holder > 0.5)
     {
-      outgoing <<= 1;
-      outgoing += 1;
       carry = 1;
+      outgoing <<= 1;
+      outgoing += carry;
     }
     else
     {
-      outgoing <<= 1;
-      outgoing += 0;
       carry = 0;
+      outgoing <<= 1;
+      outgoing += carry;
     } 
   }
   else
   {
     if(holder > 0.5)
     {
-      outgoing |= 1 << receivedBits;
       carry = 1;
+      //if(random(0,99) < errorChance) carry = 0;
+      outgoing |= carry << receivedBits;
     }
     else
     {
-      outgoing |= 0 << receivedBits;
       carry = 0;
+      //if(random(0,99) < errorChance) carry = 1;
+      outgoing |= carry << receivedBits;
     }
   }
-
-  //Serial.write(outgoing);
 
   if(outgoing == comma && !newReception)
   {
     receivedBits = 0;
     outgoing = 0;
     newReception = true;
-
-    //Serial.write(238);
   }
   else if(newReception)
   {
@@ -234,68 +229,4 @@ void doDelay()
   {
     delay(delayTime);
   }
-}
-
-void blinkByte(uint8_t byteRead)
-{
-  if (byteRead == 0)
-  {
-    return;
-  }
-
-  for (int i = 0; i < 8; i++)
-  {
-    if (bitRead(byteRead, i) == 1)
-    {
-      digitalWrite(led, HIGH);
-      doDelay();
-      digitalWrite(led, LOW);
-      doDelay();
-      digitalWrite(led, HIGH);
-      doDelay();
-      digitalWrite(led, LOW);
-      doDelay();
-    }
-    else
-    {
-      digitalWrite(led, HIGH);
-      doDelay();
-      digitalWrite(led, LOW);
-      doDelay();
-    }
-  }
-}
-
-void pwmByte(uint8_t byteRead)
-{
-  if (byteRead == 0)
-  {
-    return;
-  }
-
-  for (int i = 0; i < 8; i++)
-  {
-    if (bitRead(byteRead, i) == 1)
-    {
-      Timer1.setPeriod(highFreq);
-      Timer1.setPwmDuty(transmitterOut, 512);
-
-      doDelay();
-    }
-    else
-    {
-      Timer1.setPeriod(lowFreq);
-      Timer1.setPwmDuty(transmitterOut, 512);
-
-      doDelay();
-    }
-
-    digitalWrite(led, HIGH);
-    doDelay();
-    digitalWrite(led, LOW);
-    doDelay();
-  }
-
-  Timer1.setPeriod(lowFreq);
-  Timer1.setPwmDuty(transmitterOut, 512);
 }
