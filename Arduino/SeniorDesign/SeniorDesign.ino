@@ -9,7 +9,7 @@
 
 int receiverIn = A0, transmitterOut = 10;
 uint8_t charDelay = 20, comma = 1;
-uint8_t startMessage = 1, endMessage = 4, startChunk = 0, endChunk = 0;
+uint8_t startMessage = 1, endMessage = 4, startChunk = 2, endChunk = 3;
 int outputTest = 9, led = 8, errorChance = 100;
 
 int delayTime = 250;
@@ -352,7 +352,7 @@ void receiveBitStartStop()
   uint8_t h1 = 0, h2 = 0;
   bool corruptFlag = false;
 
-  if(!(outgoing == startMessage && outgoing == endMessage && outgoing == startChunk && outgoing == endChunk))
+  /*if(!(outgoing == startMessage || outgoing == endMessage || outgoing == startChunk || outgoing == endChunk))
   {
     for(int i = 0; i < 8; i++)
     {
@@ -360,7 +360,7 @@ void receiveBitStartStop()
       h2 |= (bitRead(outgoing, i) ^ h1) << i;
     }
     corruptFlag = true;
-  }
+  }//*/
 
   if(outgoing == startMessage && !newReception)
   {
