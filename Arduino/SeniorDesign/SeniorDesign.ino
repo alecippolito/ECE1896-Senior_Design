@@ -8,9 +8,9 @@
 #include <TimerOne.h>
 
 int receiverIn = A0, transmitterOut = 10;
-uint8_t charDelay = 20, comma = 1;
+uint8_t charDelay = 10, comma = 1;
 uint8_t startMessage = 1, endMessage = 4, startChunk = 2, endChunk = 3;
-int outputTest = 9, led = 8, errorChance = 100;
+int outputTest = 9, led = 8, errorChance = 1;
 
 int delayTime = 250;
 bool delayEnable = false;
@@ -64,15 +64,15 @@ void loop()
 
   if (transmitFlag)
   {
-    //transmitBitExtraBit();
-    transmitBitStartStop();
+    transmitBitExtraBit();
+    //transmitBitStartStop();
     transmitFlag = false;
   }
 
   if (receiveFlag)
   {
-    //receiveBitExtraBit();
-    receiveBitStartStop();
+    receiveBitExtraBit();
+    //receiveBitStartStop();
     receiveFlag = false;
   }//*/
 }
