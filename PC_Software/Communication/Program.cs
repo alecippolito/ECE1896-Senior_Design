@@ -15,6 +15,14 @@ namespace Communication
 {
     static class PortChat
     {
+        public enum SERIAL_CHARS : byte
+        {
+            MESSAGE_START = 1, // SOF
+            CHUNK_START = 2, // STX
+            CHUNK_END = 3, // ETX
+            MESSAGE_END = 4, // EOT
+            UNKNOWN = 255
+        }
         static SerialPort _serialPort;
         public const int InfiniteTimeout = -1;
         /// <summary>
@@ -29,10 +37,12 @@ namespace Communication
             Application.Run(new Form1());
             */
 
-            // Create a new SerialPort object with default settings.
+            // Create a new SerialPort object and open it
             _serialPort = new SerialPort();
-            // Allow the user to set the appropriate properties.
-            _serialPort.PortName = "COM9"; // change to whichever port is connecteed
+
+            // change to whichever port is connected on your computer or simulated port
+            _serialPort.PortName = "COM8";
+
             _serialPort.BaudRate = 9600;
             _serialPort.Parity = Parity.None;
             _serialPort.DataBits = 8;
@@ -40,35 +50,32 @@ namespace Communication
             _serialPort.Handshake = Handshake.None;
             _serialPort.ReadTimeout = InfiniteTimeout;
             _serialPort.WriteTimeout = InfiniteTimeout;
-            // open port
             _serialPort.Open();
-            // regular files (get to work on all of these for sure first **
-            string filename = @"C:/Users/ajipp/Desktop/in.txt";
-            // string filename = @"C:/Users/ajipp/Desktop/interface.py";
-            // string filename = @"C:/Users/ajipp/Desktop/text_only.docx";
-            // string filename = @"C:/Users/ajipp/Desktop/Cyber_Notes.docx";
-            // audio/video/picture
-            // string filename = @"C:\Users\ajipp\Desktop\file_example_MP3_700KB.mp3";
-            // string filename = @"C:\Users\ajipp\Desktop\video.mp4.crdownload"
-            int maxBytesPerChunk = 1024;
-            /*
+
+            string inFileName = @"C:/Users/ajipp/Desktop/in.txt";
+            string outFileName = @"C:/Users/ajipp/Desktop/Downloads/"; // simulates the download folder on computer
+
             Stopwatch stopWatch = new Stopwatch();
             stopWatch.Start();
-            SerialComms.SendFile(filename, _serialPort, maxBytesPerChunk);
-            // SerialComms.ReceiveFile(filename, _serialPort);
-            stopWatch.Stop();
-            // Get the elapsed time as a TimeSpan value.
-            TimeSpan ts = stopWatch.Elapsed;
 
-            // Format and display the TimeSpan value. 
+            int maxBytesPerChunk = 1024;
+
+            Task sendTask = Task.Factory.StartNew(() => SerialComms.SendFileEC(inFileName, _serialPort, maxBytesPerChunk));
+            Task receiveTask = Task.Factory.StartNew(() => SerialComms.ReceiveFileEC(outFileName, _serialPort));
+
+
+            Task.WaitAll(new[] { sendTask, receiveTask });
+
+
+            stopWatch.Stop();
+            TimeSpan ts = stopWatch.Elapsed;
             string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
                 ts.Hours, ts.Minutes, ts.Seconds,
                 ts.Milliseconds / 10);
             Console.WriteLine("Elapsed Time: " + elapsedTime);
-            */
-            SerialComms.SendFile(filename, _serialPort, maxBytesPerChunk);
 
         }
+
     }
 }
 

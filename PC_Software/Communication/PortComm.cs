@@ -16,7 +16,6 @@ namespace Communication
     {
         public const int InfiniteTimeout = -1;
         private SerialPort _serialPort;
-        private int outputFileNum = 0;
 
         public PortComm()
         {
