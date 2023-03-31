@@ -10,7 +10,7 @@
 int receiverIn = A0, transmitterOut = 10;
 uint8_t charDelay = 10, comma = 1;
 uint8_t startMessage = 1, endMessage = 4, startChunk = 2, endChunk = 3;
-int outputTest = 9, led = 8, errorChance = 1;
+int outputTest = 9, led = 8, errorChance = 1, count = 0;
 
 int delayTime = 250;
 bool delayEnable = false;
@@ -26,7 +26,7 @@ int lowFreq = 62; // 16KHz square wave
 //int lowFreq = 40; // 25KHz square wave
 
 // Hardware Timer 2 frequency value:
-int interruptFreq = 20000;
+int interruptFreq = 9600;
 
 void setup()
 {
@@ -44,7 +44,7 @@ void setup()
   //ITimer2.attachInterrupt(interruptFreq, timerHandler);
   ITimer2.attachInterrupt(interruptFreq, interruptHandler);
 
-  Serial.begin(9600);
+  Serial.begin(1200);
 }
 
 void timerHandler()
@@ -54,25 +54,26 @@ void timerHandler()
 }
 
 void loop()
-{
+{  
   // Read from PC
   if (Serial.available() > 0 && !newTransmission && transmittedBits == 0)
   {
     incoming = Serial.read();
+    //Serial.write(incoming);
     newTransmission = true;
   }
 
   if (transmitFlag)
   {
-    transmitBitExtraBit();
-    //transmitBitStartStop();
+    //transmitBitExtraBit();
+    transmitBitStartStop();
     transmitFlag = false;
   }
 
   if (receiveFlag)
   {
-    receiveBitExtraBit();
-    //receiveBitStartStop();
+    //receiveBitExtraBit();
+    receiveBitStartStop();
     receiveFlag = false;
   }//*/
 }
