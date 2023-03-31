@@ -7,6 +7,34 @@ using System.Text;
 
 public static class SerialComms
 {
+    /*
+     * How sending works:
+     *      Writes [MESSAGE START] (1 bytes)
+     *          Sends filename and extension
+     *         * Opens up File and Binary Reader *
+     *          For each chunk (of maxBytesPerChunk size), it sends:
+     *              [CHUNK_START] (1 byte)
+     *              <CHUNK_LENGTH> (4 bytes)
+     *              <CHUNK DATA>
+     *              [CHUNK_END] (1 byte)
+     *      After all chunks are sent,
+     *          [MESSAGE_EN] (1 byte)
+     *          
+     *          
+     *          
+     * How recieving works:
+     *      Checks first thing sent is [MESSAGE_START]
+     *      * Opens up File and Binary Reader *
+     *      Makes sure code is [CHUNK_START] or [MESSAGE_END]
+     *      If [MESSAGE_END], break loop
+     *      Does Error Handling: if bytesRead != 4, if bytesRead != chunkLength, if last byte = [CHUNK_END]
+     *      Writes chunk data to fileName      
+     * 
+     */
+
+    /*////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                                                                        SEND AND RECIEVE FUNCTIONS (INCLUDING ERROR DETECTION)
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
     public enum SERIAL_CHARS : byte
     {
         MESSAGE_START = 1, // SOF
@@ -16,27 +44,9 @@ public static class SerialComms
         UNKNOWN = 255
     }
 
+    
 
-
-    /*
-     * SendFile(): Outputs total bytes sent to Console
-     *      fileName: desired filename to be sent
-     *      serial: serial port opened to send stream through
-     *      maxBytesPerChunk: max bytes sent in a chunk
-     * How it works:
-     *      First,
-     *          Writes [MESSAGE START] (1 bytes)
-     *          Sends filename and extension
-     *         * Opens up File and Binary Reader *
-     *          For each chunk (of maxBytesPerChunk size), it sends:
-     *              [CHUNK_START] (1 byte)
-     *              <CHUNK_LENGTH> (4 bytes)
-     *              <CHUNK DATA>
-     *              [CHUNK_END] (1 byte)
-     *      After all chunks are sent,
-     *          [MESSAGE_END] (1 byte)
-     */
-    public static void SendFile(string filePath, SerialPort serial, int maxBytesPerChunk)
+    public static void Send(string filePath, SerialPort serial, int maxBytesPerChunk)
     {
         var totalBytes = 0;
         // Send Start Byte
@@ -72,38 +82,7 @@ public static class SerialComms
         serial.Write(new byte[] { (byte)SERIAL_CHARS.MESSAGE_END }, 0, 1);
     }
 
-    public static int sendBytes(SerialPort serial, byte[] bytes)
-    {
-        // SERIAL: send [CHUNK_START] byte
-        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_START }, 0, 1);
-
-        // SERIAL: send length of chunk (as 4 byte integer)             
-        serial.Write(BitConverter.GetBytes(bytes.Length), 0, 4);
-
-        // SERIAL: send data
-        serial.Write(bytes, 0, bytes.Length);
-
-        // SERIAL: send [CHUNK_END] byte
-        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_END }, 0, 1);
-
-        return bytes.Length;
-    }
-
-   
-
-    /*
-     * RecieveFile(): Outputs total bytes sent to Console and Errors that could happen when reading
-     *      fileName: desired filename to be sent
-     *      serial: serial port opened to send stream through
-     * How it works:
-     *      Checks first thing sent is [MESSAGE_START]
-     *      * Opens up File and Binary Reader *
-     *      Makes sure code is [CHUNK_START] or [MESSAGE_END]
-     *      If [MESSAGE_END], break loop
-     *      Does Error Handling: if bytesRead != 4, if bytesRead != chunkLength, if last byte = [CHUNK_END]
-     *      Writes chunk data to fileName      
-     */
-    public static bool ReceiveFile(string filePath, SerialPort serial)
+    public static bool Receive(string filePath, SerialPort serial)
     {
         var totalBytes = 0;
 
@@ -128,6 +107,116 @@ public static class SerialComms
         }
         Console.WriteLine("Receive Done.");
         return func;
+    }
+
+
+    public static void SendWithErrorCorrection(string filePath, SerialPort serial, int maxBytesPerChunk)
+    {
+        var totalBytes = 0;
+        // Seend start Byte
+        serial.Write(new byte[] { (byte)SERIAL_CHARS.MESSAGE_START }, 0, 1);
+
+        // Read in Filename with ECs
+        sendFileNameeEC(filePath, serial);
+
+        // FILE: open stream for reading
+        using (var stream = File.Open(filePath, FileMode.Open))
+        {
+            // FILE: create binary reader to read from stream
+            using (var reader = new BinaryReader(stream, Encoding.UTF8, false))
+            {
+                while (true)
+                {
+                    // FILE: read next chunk of data
+                    var bytes = reader.ReadBytes(maxBytesPerChunk);
+                    // end loop if no more data in file
+                    if (bytes.Length == 0)
+                    {
+                        break;
+                    }
+                    totalBytes += sendBytesEC(serial, bytes);
+
+                    Console.WriteLine("Send TotalBytes: " + totalBytes);
+                }
+            }
+        }
+        Console.WriteLine("Send done.");
+
+        // SERIAL: send [MESSAGE_END] byte
+        serial.Write(new byte[] { (byte)SERIAL_CHARS.MESSAGE_END }, 0, 1);
+    }
+
+    public static bool ReceiveWithErrrorCorrection(string filePath, SerialPort serial)
+    {
+        var totalBytes = 0;
+        // SERIAL: receive [MESSAGE_START] byte
+        if (!ReceiveCode(serial, SERIAL_CHARS.MESSAGE_START))
+        {
+            return false;
+        }
+        // Get Filename and add to path
+        string fileName = getFilenameEC(serial);
+        filePath = filePath + fileName;
+        bool res;
+        // FILE: create stream for writing
+        using (var stream = File.Create(filePath))
+        {
+            // FILE: create binary writer to write to stream
+            using (var writer = new BinaryWriter(stream, Encoding.UTF8, false))
+            {
+                res = readBytesEC(serial, writer, totalBytes);
+            }
+        }
+        Console.WriteLine("Receive Done.");
+        return res;
+    }
+
+    /*////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                                                                    SENDER HELPER FUNCTIONS
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+    public static void sendFileName(string filePath, SerialPort serial)
+    {
+        string fileName = Path.GetFileName(filePath);
+        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_START }, 0, 1);
+        serial.Write(BitConverter.GetBytes(Encoding.ASCII.GetBytes(fileName).Length), 0, 4);
+        serial.Write(Encoding.ASCII.GetBytes(fileName), 0, Encoding.ASCII.GetBytes(fileName).Length);
+        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_END }, 0, 1);
+    }
+    public static int sendBytes(SerialPort serial, byte[] bytes)
+    {
+        // SERIAL: send [CHUNK_START] byte
+        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_START }, 0, 1);
+
+        // SERIAL: send length of chunk (as 4 byte integer)             
+        serial.Write(BitConverter.GetBytes(bytes.Length), 0, 4);
+
+        // SERIAL: send data
+        serial.Write(bytes, 0, bytes.Length);
+
+        // SERIAL: send [CHUNK_END] byte
+        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_END }, 0, 1);
+
+        return bytes.Length;
+    }
+
+
+    /*////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                                                                    RECIEVER HELPER FUNCTIONS
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+    public static string getFilename(SerialPort serial)
+    {
+        List<SERIAL_CHARS> expectedCodes = new List<SERIAL_CHARS>();
+        expectedCodes.Add(SERIAL_CHARS.CHUNK_START);
+        expectedCodes.Add(SERIAL_CHARS.MESSAGE_END);
+        ReceiveCode(serial, expectedCodes, out var receivedcode);
+        var lenBytes = new Byte[4];
+        var bytesRead = SerialRead(serial, lenBytes, 4);
+        var chunkLength = BitConverter.ToInt32(lenBytes, 0);
+        var chunkData = new byte[chunkLength];
+        bytesRead = SerialRead(serial, chunkData, chunkLength);
+        ReceiveCode(serial, SERIAL_CHARS.CHUNK_END);
+        string result = System.Text.Encoding.UTF8.GetString(chunkData);
+        return result;
     }
     public static bool readBytes(SerialPort serial, BinaryWriter writer, int totalBytes)
     {
@@ -187,39 +276,6 @@ public static class SerialComms
     }
     
 
-    public static void sendFileName(string filePath, SerialPort serial)
-    {
-        string fileName = Path.GetFileName(filePath);
-        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_START }, 0, 1);
-        serial.Write(BitConverter.GetBytes(Encoding.ASCII.GetBytes(fileName).Length), 0, 4);
-        serial.Write(Encoding.ASCII.GetBytes(fileName), 0, Encoding.ASCII.GetBytes(fileName).Length);
-        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_END }, 0, 1);
-    }
-
-    public static string getFilename(SerialPort serial)
-    {
-        List<SERIAL_CHARS> expectedCodes = new List<SERIAL_CHARS>();
-        expectedCodes.Add(SERIAL_CHARS.CHUNK_START);
-        expectedCodes.Add(SERIAL_CHARS.MESSAGE_END);
-        ReceiveCode(serial, expectedCodes, out var receivedcode);
-        var lenBytes = new Byte[4];
-        var bytesRead = SerialRead(serial, lenBytes, 4);
-        var chunkLength = BitConverter.ToInt32(lenBytes, 0);
-        var chunkData = new byte[chunkLength];
-        bytesRead = SerialRead(serial, chunkData, chunkLength);
-        ReceiveCode(serial, SERIAL_CHARS.CHUNK_END);
-        string result = System.Text.Encoding.UTF8.GetString(chunkData);
-        return result;
-    }
-
-
-
-    /*
-     * SerialRead: Returns number of bytes read
-     *      How it works:
-     *         * When bytesRead < dataLength *
-     *         Read in from offset to the rest          
-     */
     private static int SerialRead(SerialPort serial, byte[] data, int dataLength)
     {
         var bytesRead = 0;
@@ -235,7 +291,6 @@ public static class SerialComms
         return bytesRead;
     }
 
-    // recieve message start
     private static bool ReceiveCode(SerialPort serial, SERIAL_CHARS expectedCode)
     {
         var b = serial.ReadByte();
@@ -262,7 +317,6 @@ public static class SerialComms
         return true;
     }
 
-    // reecieve message end
     private static bool ReceiveCode(SerialPort serial, List<SERIAL_CHARS> expectedCodes, out SERIAL_CHARS receivedCode)
     {
         var b = serial.ReadByte();
@@ -287,48 +341,9 @@ public static class SerialComms
         return true;
     }
 
-
-
-    public static void SendFileEC(string filePath, SerialPort serial, int maxBytesPerChunk)
-    {
-        var totalBytes = 0;
-        // Seend start Byte
-        serial.Write(new byte[] { (byte)SERIAL_CHARS.MESSAGE_START }, 0, 1);
-
-        // Read in Filename with ECs
-        sendFileNameeEC(filePath, serial);
-
-        // FILE: open stream for reading
-        using (var stream = File.Open(filePath, FileMode.Open))
-        {
-            // FILE: create binary reader to read from stream
-            using (var reader = new BinaryReader(stream, Encoding.UTF8, false))
-            {
-                while (true)
-                {
-                    // FILE: read next chunk of data
-                    var bytes = reader.ReadBytes(maxBytesPerChunk);
-                    // end loop if no more data in file
-                    if (bytes.Length == 0)
-                    {
-                        break;
-                    }
-                    totalBytes += sendBytesEC(serial, bytes);    
-                    
-                    Console.WriteLine("Send TotalBytes: " + totalBytes);
-                }
-            }
-        }
-        Console.WriteLine("Send done.");
-
-        // SERIAL: send [MESSAGE_END] byte
-        serial.Write(new byte[] { (byte)SERIAL_CHARS.MESSAGE_END }, 0, 1);
-    }
-
- 
-
-    
-
+    /*////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                                                                        SENDER ERROR CORRECTION HELPER FUNCTIONS
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 
     public static void sendFileNameeEC(string filePath, SerialPort serial)
     {
@@ -337,37 +352,62 @@ public static class SerialComms
         sendFileName(filePath, serial);
     }
 
+    public static int sendBytesEC(SerialPort serial, byte[] bytes)
+    {
+        // SERIAL: send [CHUNK_START] byte
+        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_START }, 0, 1);
+
+        // SERIAL: send length of chunk (as 4 byte integer)             
+        serial.Write(BitConverter.GetBytes(bytes.Length), 0, 4);
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            // SERIAL: send data
+            serial.Write(bytes, i, 1);
+            serial.Write(bytes, i, 1);
+            serial.Write(bytes, i, 1);
+        }
+
+        // SERIAL: send [CHUNK_END] byte
+        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_END }, 0, 1);
+
+        return bytes.Length;
+    }
+
     public static string getFilenameEC(SerialPort serial)
     {
         string fn1 = getFilename(serial);
         string fn2 = getFilename(serial);
         string fn3 = getFilename(serial);
         // all the same case
-        if (String.Compare(fn1, fn2) == 0 &&    String.Compare(fn2, fn3) == 0)
+        if (String.Compare(fn1, fn2) == 0 && String.Compare(fn2, fn3) == 0)
         {
             return fn1;
         }
         // 1 and 2 are the same
-        else if (String.Compare(fn1,fn2) == 0)
+        else if (String.Compare(fn1, fn2) == 0)
         {
             return fn1;
         }
         // 2 and 3 are the same
-        else if (String.Compare(fn2,fn3) == 0)
+        else if (String.Compare(fn2, fn3) == 0)
         {
             return fn2;
         }
         // 1 and 3 are the same
-        else if (String.Compare(fn1,fn3) == 0)
-        {
-            return fn1;
-        } else
+        else if (String.Compare(fn1, fn3) == 0)
         {
             return fn1;
         }
-        
+        else
+        {
+            return fn1;
+        }
     }
-    private static byte chooseByte(char d1, char d2, char d3)
+
+    /*////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                                                                        RECIEVER ERROR CORRECTION HELPER FUNCTIONS
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+    private static byte chooseByteEC(char d1, char d2, char d3)
     {
         // all same
         if(d1.Equals(d2) == true && d2.Equals(d3) == true)
@@ -397,30 +437,6 @@ public static class SerialComms
     }
 
 
-    public static bool ReceiveFileEC(string filePath, SerialPort serial)
-    {
-        var totalBytes = 0;
-        // SERIAL: receive [MESSAGE_START] byte
-        if (!ReceiveCode(serial, SERIAL_CHARS.MESSAGE_START))
-        {
-            return false;
-        }
-        // Get Filename and add to path
-        string fileName = getFilenameEC(serial);
-        filePath = filePath + fileName;
-        bool res;
-        // FILE: create stream for writing
-        using (var stream = File.Create(filePath))
-        {
-            // FILE: create binary writer to write to stream
-            using (var writer = new BinaryWriter(stream, Encoding.UTF8, false))
-            {
-                res = readBytesEC(serial, writer, totalBytes);
-            }
-        }
-        Console.WriteLine("Receive Done.");
-        return res;
-    }
     public static bool readBytesEC(SerialPort serial, BinaryWriter writer, int totalBytes)
     {
         var lenBytes = new Byte[4];
@@ -501,29 +517,10 @@ public static class SerialComms
         char d2 = Convert.ToChar(data[1]);
         char d3 = Convert.ToChar(data[2]);
         // error check
-        return chooseByte(d1, d2, d3);
+        return chooseByteEC(d1, d2, d3);
     }
     
-    public static int sendBytesEC(SerialPort serial, byte[] bytes)
-    {
-        // SERIAL: send [CHUNK_START] byte
-        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_START }, 0, 1);
 
-        // SERIAL: send length of chunk (as 4 byte integer)             
-        serial.Write(BitConverter.GetBytes(bytes.Length), 0, 4);
-        for (int i = 0; i < bytes.Length; i++)
-        {
-            // SERIAL: send data
-            serial.Write(bytes, i, 1);
-            serial.Write(bytes, i, 1);
-            serial.Write(bytes, i, 1);
-        }
-
-        // SERIAL: send [CHUNK_END] byte
-        serial.Write(new byte[] { (byte)SERIAL_CHARS.CHUNK_END }, 0, 1);
-
-        return bytes.Length;
-    }
 
 
 
