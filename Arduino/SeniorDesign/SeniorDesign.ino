@@ -8,7 +8,7 @@
 #include <TimerOne.h>
 
 const int receiverIn = A0, transmitterOut = 10;
-const uint8_t startMessage = 65, endMessage = 67, startChunk = 2, endChunk = 3, comma = 1, charDelay = 10;
+const uint8_t startMessage = 65, endMessage = 67, startChunk = 2, endChunk = 3, comma = 1, charDelay = 20;
 
 uint8_t incoming = 0, outgoing = 0, transmittedBits = 0, receivedBits = 0;
 bool transmitFlag = false, receiveFlag = false, newTransmission = false, newReception = false;
@@ -25,7 +25,7 @@ const int lowFreq = 62; // 16KHz square wave
 //const int lowFreq = 40; // 25KHz square wave
 
 // Receiver sampling votes:
-const int samplingVotes = 11;
+const int samplingVotes = 3;
 int votesTransmitted = 0, votesReceived = 0;
 float votesStored = 0;
 
@@ -81,8 +81,6 @@ void loop()
     receiveBitExtraBit();
     //receiveBitStartStop();
     receiveFlag = false;
-    if(votesReceived < maxVotes) votesReceived++;
-    else votesReceived = 0;
   }//*/
 }
 
@@ -132,10 +130,9 @@ void transmitBitExtraBit()
     doDelay();
   }
 
-  Serial.write(40);
+  Serial.write(84);
   if(digitalRead(outputTest) == true) Serial.write(1);
-  else Serial.write(0);
-  Serial.write(41);//*/
+  else Serial.write(0);//*/
 
   if (delayEnable)
   {
@@ -235,37 +232,23 @@ void transmitBitStartStop()
 /*/
 void receiveBitExtraBit()
 {
-  if(votesReceived < maxVotes && newReception)
+  if(!newReception)
   {
-    if (analogRead(receiverIn) > 512)
-    {
-      votesStored += 1;
-    }
-    else
-    {
-      votesStored += 0;
-    }
-
-    //Serial.write(lround(votesStored));
-
+    votesStored = observeAnalogPin();
+  }
+  else if(newReception && votesReceived < maxVotes)
+  {
+    votesStored += observeAnalogPin();
     return;
   }
-  else if(!newReception)
+  else if(newReception && votesReceived == maxVotes)
   {
-    if (analogRead(receiverIn) > 512)
-    {
-      votesStored = 1;
-    }
-    else
-    {
-      votesStored = 0;
-    }
-  }
-
-  if(newReception) 
-  {
+    votesStored += observeAnalogPin();
     votesStored /= samplingVotes;
-  }
+  }//*/
+
+  //votesStored = observeAnalogPin();
+
   uint8_t carry;
 
   if(!newReception)
@@ -303,17 +286,15 @@ void receiveBitExtraBit()
 
   if(outgoing == comma && !newReception)
   {
+    Serial.write(78);
     newReception = true;
     receivedBits = 0;
     outgoing = 0;
     votesReceived = 0;
   }
   else if(newReception)
-  {
-    if(digitalRead(outputTest) == true) Serial.write(250);
-    else Serial.write(251);//*/
-    
-    //Serial.write(246);
+  {    
+    Serial.write(82);
     Serial.write(carry);
     if (receivedBits < 7) receivedBits++;
     else
@@ -339,15 +320,6 @@ void receiveBitStartStop()
 {
   if(votesReceived < maxVotes)
   {
-    if (analogRead(receiverIn) > 512)
-    {
-      votesStored += 1;
-    }
-    else
-    {
-      votesStored += 0;
-    }
-
     return;
   }
   
@@ -413,6 +385,18 @@ void receiveBitStartStop()
   }
 }
 
+int observeAnalogPin()
+{
+  if (analogRead(receiverIn) > 512)
+  {
+    return 1;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
 void interruptHandler()
 {
   if(votesTransmitted < maxVotes) votesTransmitted++;
@@ -421,7 +405,10 @@ void interruptHandler()
     transmitFlag = true;
     votesTransmitted = 0;
   }
+
   receiveFlag = true;
+  if(votesReceived < maxVotes) votesReceived++;
+  else votesReceived = 0;
 }
 
 void doDelay()
