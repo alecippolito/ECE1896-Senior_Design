@@ -7,26 +7,32 @@
 #include <TimerInterrupt.h>
 #include <TimerOne.h>
 
-int receiverIn = A0, transmitterOut = 10;
-uint8_t charDelay = 10, comma = 1;
-uint8_t startMessage = 1, endMessage = 4, startChunk = 2, endChunk = 3;
-int outputTest = 9, led = 8, errorChance = 1, count = 0;
-
-int delayTime = 250;
-bool delayEnable = false;
+const int receiverIn = A0, transmitterOut = 10;
+const uint8_t startMessage = 65, endMessage = 67, startChunk = 2, endChunk = 3, comma = 1, charDelay = 10;
 
 uint8_t incoming = 0, outgoing = 0, transmittedBits = 0, receivedBits = 0;
 bool transmitFlag = false, receiveFlag = false, newTransmission = false, newReception = false;
+
+const int delayTime = 250, outputTest = 9, led = 8, errorChance = 1;
+const bool delayEnable = false;
+
 bool o = false;
 
 // Hardware Timer 1 frequency values:
-int highFreq = 41; // 24KHz square wave
-//int highFreq = 20; // 50KHz square wave
-int lowFreq = 62; // 16KHz square wave
-//int lowFreq = 40; // 25KHz square wave
+const int highFreq = 41; // 24KHz square wave
+//const int highFreq = 20; // 50KHz square wave
+const int lowFreq = 62; // 16KHz square wave
+//const int lowFreq = 40; // 25KHz square wave
+
+// Receiver sampling votes:
+const int samplingVotes = 11;
+int votesTransmitted = 0, votesReceived = 0;
+float votesStored = 0;
 
 // Hardware Timer 2 frequency value:
-int interruptFreq = 9600;
+const int baudRate = 1000;
+int interruptFreq = 20000;
+int maxVotes = 0;
 
 void setup()
 {
@@ -56,25 +62,27 @@ void timerHandler()
 void loop()
 {  
   // Read from PC
-  if (Serial.available() > 0 && !newTransmission && transmittedBits == 0)
+  if(Serial.available() > 0 && !newTransmission && transmittedBits == 0)
   {
     incoming = Serial.read();
     //Serial.write(incoming);
     newTransmission = true;
   }
 
-  if (transmitFlag)
+  if(transmitFlag)
   {
-    //transmitBitExtraBit();
-    transmitBitStartStop();
+    transmitBitExtraBit();
+    //transmitBitStartStop();
     transmitFlag = false;
   }
 
-  if (receiveFlag)
+  if(receiveFlag)
   {
-    //receiveBitExtraBit();
-    receiveBitStartStop();
+    receiveBitExtraBit();
+    //receiveBitStartStop();
     receiveFlag = false;
+    if(votesReceived < maxVotes) votesReceived++;
+    else votesReceived = 0;
   }//*/
 }
 
@@ -124,8 +132,10 @@ void transmitBitExtraBit()
     doDelay();
   }
 
-  /*if(digitalRead(outputTest) == true) Serial.write(1);
-  else Serial.write(0);//*/
+  Serial.write(40);
+  if(digitalRead(outputTest) == true) Serial.write(1);
+  else Serial.write(0);
+  Serial.write(41);//*/
 
   if (delayEnable)
   {
@@ -221,29 +231,46 @@ void transmitBitStartStop()
 /*/
  *  For each byte, receives the extra 'start' bit and then receives eight data bits to then reconstruct into a data byte from the transmitter.
  *  While the 'start' bit has not been found, the receiver is always checking for start bits - if 0 is received instead, repeat.
+ *  
 /*/
 void receiveBitExtraBit()
 {
-  uint8_t votes = 5, carry;
-  float holder = 0;
-
-  for(int i=0; i<votes; i++)
+  if(votesReceived < maxVotes && newReception)
   {
     if (analogRead(receiverIn) > 512)
     {
-      holder += 1;
+      votesStored += 1;
     }
     else
     {
-      holder += 0;
+      votesStored += 0;
+    }
+
+    //Serial.write(lround(votesStored));
+
+    return;
+  }
+  else if(!newReception)
+  {
+    if (analogRead(receiverIn) > 512)
+    {
+      votesStored = 1;
+    }
+    else
+    {
+      votesStored = 0;
     }
   }
 
-  holder /= votes;
+  if(newReception) 
+  {
+    votesStored /= samplingVotes;
+  }
+  uint8_t carry;
 
   if(!newReception)
   {
-    if(holder > 0.5)
+    if(votesStored > 0.5)
     {
       carry = 1;
       outgoing <<= 1;
@@ -258,7 +285,7 @@ void receiveBitExtraBit()
   }
   else
   {
-    if(holder > 0.5)
+    if(votesStored > 0.5)
     {
       carry = 1;
       //if(random(0,99) < errorChance) carry = 0;
@@ -272,14 +299,22 @@ void receiveBitExtraBit()
     }
   }
 
+  votesStored = 0;
+
   if(outgoing == comma && !newReception)
   {
     newReception = true;
     receivedBits = 0;
     outgoing = 0;
+    votesReceived = 0;
   }
   else if(newReception)
   {
+    if(digitalRead(outputTest) == true) Serial.write(250);
+    else Serial.write(251);//*/
+    
+    //Serial.write(246);
+    Serial.write(carry);
     if (receivedBits < 7) receivedBits++;
     else
     {
@@ -302,26 +337,26 @@ void receiveBitExtraBit()
  */
 void receiveBitStartStop()
 {
-  uint8_t votes = 5, carry;
-  float holder = 0;
-
-  for(int i=0; i<votes; i++)
+  if(votesReceived < maxVotes)
   {
     if (analogRead(receiverIn) > 512)
     {
-      holder += 1;
+      votesStored += 1;
     }
     else
     {
-      holder += 0;
+      votesStored += 0;
     }
-  }
 
-  holder /= votes;
+    return;
+  }
+  
+  votesStored /= samplingVotes;
+  uint8_t carry;
 
   if(!newReception)
   {
-    if(holder > 0.5)
+    if(votesStored > 0.5)
     {
       carry = 1;
       outgoing <<= 1;
@@ -336,7 +371,7 @@ void receiveBitStartStop()
   }
   else
   {
-    if(holder > 0.5)
+    if(votesStored > 0.5)
     {
       carry = 1;
       //if(random(0,99) < errorChance) carry = 0;
@@ -350,19 +385,6 @@ void receiveBitStartStop()
     }
   }
 
-  uint8_t h1 = 0, h2 = 0;
-  bool corruptFlag = false;
-
-  /*if(!(outgoing == startMessage || outgoing == endMessage || outgoing == startChunk || outgoing == endChunk))
-  {
-    for(int i = 0; i < 8; i++)
-    {
-      if(random(0,99) < errorChance) h1 = 0;
-      h2 |= (bitRead(outgoing, i) ^ h1) << i;
-    }
-    corruptFlag = true;
-  }//*/
-
   if(outgoing == startMessage && !newReception)
   {
     Serial.write(outgoing);
@@ -375,24 +397,14 @@ void receiveBitStartStop()
     if (receivedBits < 7) receivedBits++;
     else
     {
-      if(corruptFlag)
+      if(outgoing != 0)
       {
-        if(h2 != 0)
-        {
-          Serial.write(h2);
-        }
+        Serial.write(outgoing);
       }
-      else
+
+      if(outgoing == endMessage || outgoing == 0)
       {
-        if(outgoing != 0)
-        {
-          Serial.write(outgoing);
-        }
-  
-        if(outgoing == endMessage)
-        {
-          newReception = false;
-        }
+        newReception = false;
       }
 
       receivedBits = 0;
@@ -403,7 +415,12 @@ void receiveBitStartStop()
 
 void interruptHandler()
 {
-  transmitFlag = true;
+  if(votesTransmitted < maxVotes) votesTransmitted++;
+  else
+  {
+    transmitFlag = true;
+    votesTransmitted = 0;
+  }
   receiveFlag = true;
 }
 
