@@ -25,14 +25,14 @@ const int lowFreq = 62; // 16KHz square wave
 //const int lowFreq = 40; // 25KHz square wave
 
 // Receiver sampling votes:
-const int samplingVotes = 3;
+const int samplingVotes = 1;
 int votesTransmitted = 0, votesReceived = 0;
 float votesStored = 0;
 
 // Hardware Timer 2 frequency value:
 const int baudRate = 1000;
 int interruptFreq = 20000;
-int maxVotes = 0;
+int maxVotes = (samplingVotes - 1);
 
 void setup()
 {
@@ -243,11 +243,12 @@ void receiveBitExtraBit()
   }
   else if(newReception && votesReceived == maxVotes)
   {
+    Serial.write(255);
     votesStored += observeAnalogPin();
+    //byte* b = (byte*) &votesStored;
+    //Serial.write(b,4);    
     votesStored /= samplingVotes;
   }//*/
-
-  //votesStored = observeAnalogPin();
 
   uint8_t carry;
 
