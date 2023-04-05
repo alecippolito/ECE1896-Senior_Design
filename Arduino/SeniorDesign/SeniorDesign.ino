@@ -7,32 +7,49 @@
 #include <TimerInterrupt.h>
 #include <TimerOne.h>
 
-const int receiverIn = A0, transmitterOut = 10;
-const uint8_t startMessage = 65, endMessage = 67, startChunk = 2, endChunk = 3, comma = 1, charDelay = 20;
+// Functional value definitions/initializations:
+const int transmitterOut = 10,    // Define transmitter square wave out pin (needs to be PWM pin)
+          receiverIn = A0,        // Define receiver signal in pin (needs to be ADC pin)
+          voltageLevel = 512;     // Define voltage threshold value (512 is ~2.5v)
+          
+const uint8_t startMessage = 65,  // Define messagestart byte
+              endMessage = 67,    // Define message end byte
+              startChunk = 2,     // Define chunk start byte
+              endChunk = 3,       // Define chunk end byte
+              comma = 1,          // Define comma bit for separating transmitted bytes
+              charDelay = 20;    // Define delay for each transmitted bit
 
-uint8_t incoming = 0, outgoing = 0, transmittedBits = 0, receivedBits = 0;
-bool transmitFlag = false, receiveFlag = false, newTransmission = false, newReception = false;
+uint8_t incoming = 0,             // 8-bit integer to store byte sent over serial for transmitting
+        outgoing = 0,             // 8-bit integer to store reconstructed byte from received bits
+        transmittedBits = 0,      // Number of bits transmitted in current byte
+        receivedBits = 0;         // Number of bits received in current byte
 
-const int delayTime = 250, outputTest = 9, led = 8, errorChance = 1;
-const bool delayEnable = false;
+bool transmitFlag = false,        // Flag set by ISR to allow transmitter to send one bit
+     receiveFlag = false,         // Flag set by ISR to allow receiver to receive one bit
+     newTransmission = false,     // Flag set by receiving a serial byte to prevent reading and sending more than one byte at a time
+     newReception = false;        // Flag set by receiving either a 'comma' bit, or start byteto reconstruct bits into bytes
 
-bool o = false;
+// Testing pin/value definitions:
+const int delayTime = 250,        // Delay time in milliseconds for artificially delaying transmitter bit output
+          outputTest = 9,         // Digital output for simulating receiver hardware signal to microcontroller receive pin
+          led = 8,                // LED output for signaling transmitter bit delay over
+          errorChance = 1;        // Percentage of bits artificially flipped
+          
+const bool delayEnable = false;   // Enable transmitter bit delay to view square wave output
 
 // Hardware Timer 1 frequency values:
-const int highFreq = 41; // 24KHz square wave
-//const int highFreq = 20; // 50KHz square wave
-const int lowFreq = 62; // 16KHz square wave
-//const int lowFreq = 40; // 25KHz square wave
+const int highFreq = 41;          // 24KHz square wave output for logical high
+const int lowFreq = 62;           // 16KHz square wave output for logical low
 
 // Receiver sampling votes:
-const int samplingVotes = 1;
-int votesTransmitted = 0, votesReceived = 0;
-float votesStored = 0;
+const int samplingVotes = 3;     // Number of times to sample receiver output to decide the current bit
+float votesStored = 0;            // Current value of all samples - averaged after final sample is taken 
+bool lastVote = false;            // Determines if sampling is complete
 
-// Hardware Timer 2 frequency value:
-const int baudRate = 1000;
-int interruptFreq = 20000;
-int maxVotes = (samplingVotes - 1);
+// Hardware Timer 2 frequency values:
+const int frequencyScaler = 0;    // divides interruptFreq by (frequencyScaler + 1) for effective bitrate
+int scaler = 0;                   // Scaler iterator for stalling transmit/receive functions
+int interruptFreq = 8000;         // Frequency of hardware timer 2 - min of 6600 Hz for accurate data recovery
 
 void setup()
 {
@@ -47,16 +64,9 @@ void setup()
 
   // Setup Timer2 for transmit/receive operations:
   ITimer2.init();
-  //ITimer2.attachInterrupt(interruptFreq, timerHandler);
   ITimer2.attachInterrupt(interruptFreq, interruptHandler);
 
-  Serial.begin(1200);
-}
-
-void timerHandler()
-{
-  digitalWrite(led, o);
-  o = !o;
+  Serial.begin(2400);
 }
 
 void loop()
@@ -65,7 +75,6 @@ void loop()
   if(Serial.available() > 0 && !newTransmission && transmittedBits == 0)
   {
     incoming = Serial.read();
-    //Serial.write(incoming);
     newTransmission = true;
   }
 
@@ -78,10 +87,14 @@ void loop()
 
   if(receiveFlag)
   {
-    receiveBitExtraBit();
-    //receiveBitStartStop();
+    for(int i = 0; i < samplingVotes; i++)
+    {
+      lastVote = i == (samplingVotes - 1) ? true : false;
+      receiveBitExtraBit(lastVote);
+      //receiveBitStartStop(lastVote);
+    }
     receiveFlag = false;
-  }//*/
+  }
 }
 
 /*/  
@@ -130,10 +143,6 @@ void transmitBitExtraBit()
     doDelay();
   }
 
-  Serial.write(84);
-  if(digitalRead(outputTest) == true) Serial.write(1);
-  else Serial.write(0);//*/
-
   if (delayEnable)
   {
     digitalWrite(led, HIGH);
@@ -149,7 +158,6 @@ void transmitBitExtraBit()
   }
   else
   {
-    //Serial.write(incoming);
     transmittedBits = 0;
     incoming = 0;
 
@@ -196,9 +204,6 @@ void transmitBitStartStop()
     doDelay();
   }
 
-  /*if(digitalRead(outputTest) == true) Serial.write(1);
-  else Serial.write(0);//*/
-
   if (delayEnable)
   {
     digitalWrite(led, HIGH);
@@ -214,7 +219,6 @@ void transmitBitStartStop()
   }
   else
   {
-    //Serial.write(incoming);
     transmittedBits = 0;
     incoming = 0;
 
@@ -230,25 +234,22 @@ void transmitBitStartStop()
  *  While the 'start' bit has not been found, the receiver is always checking for start bits - if 0 is received instead, repeat.
  *  
 /*/
-void receiveBitExtraBit()
+void receiveBitExtraBit(bool lastSample)
 {
   if(!newReception)
   {
     votesStored = observeAnalogPin();
   }
-  else if(newReception && votesReceived < maxVotes)
+  else if(!lastSample && newReception)
   {
     votesStored += observeAnalogPin();
     return;
   }
-  else if(newReception && votesReceived == maxVotes)
+  else if(newReception)
   {
-    Serial.write(255);
     votesStored += observeAnalogPin();
-    //byte* b = (byte*) &votesStored;
-    //Serial.write(b,4);    
     votesStored /= samplingVotes;
-  }//*/
+  }
 
   uint8_t carry;
 
@@ -287,22 +288,18 @@ void receiveBitExtraBit()
 
   if(outgoing == comma && !newReception)
   {
-    Serial.write(78);
     newReception = true;
     receivedBits = 0;
     outgoing = 0;
-    votesReceived = 0;
   }
   else if(newReception)
-  {    
-    Serial.write(82);
-    Serial.write(carry);
+  {
     if (receivedBits < 7) receivedBits++;
     else
     {
       if(outgoing != 0)
       {
-        Serial.write(outgoing);
+        Serial.write(outgoing >> 1);
       }
 
       newReception = false;
@@ -317,14 +314,23 @@ void receiveBitExtraBit()
  *  Once start byte is received, synchronize eight bit reconstruction in a stream.
  *  Once stop byte is received, go back to waiting for start byte.
  */
-void receiveBitStartStop()
-{
-  if(votesReceived < maxVotes)
+void receiveBitStartStop(bool lastSample)
+{ 
+  if(!newReception)
   {
+    votesStored = observeAnalogPin();
+  }
+  else if(!lastSample && newReception)
+  {
+    votesStored += observeAnalogPin();
     return;
   }
-  
-  votesStored /= samplingVotes;
+  else if(newReception)
+  {
+    votesStored += observeAnalogPin();
+    votesStored /= samplingVotes;
+  }
+
   uint8_t carry;
 
   if(!newReception)
@@ -358,6 +364,8 @@ void receiveBitStartStop()
     }
   }
 
+  Serial.write(outgoing);
+
   if(outgoing == startMessage && !newReception)
   {
     Serial.write(outgoing);
@@ -388,7 +396,7 @@ void receiveBitStartStop()
 
 int observeAnalogPin()
 {
-  if (analogRead(receiverIn) > 512)
+  if (analogRead(receiverIn) > voltageLevel)
   {
     return 1;
   }
@@ -400,16 +408,13 @@ int observeAnalogPin()
 
 void interruptHandler()
 {
-  if(votesTransmitted < maxVotes) votesTransmitted++;
-  else
+  if(scaler == 0)
   {
     transmitFlag = true;
-    votesTransmitted = 0;
+    receiveFlag = true;
   }
-
-  receiveFlag = true;
-  if(votesReceived < maxVotes) votesReceived++;
-  else votesReceived = 0;
+  if(scaler < frequencyScaler) scaler++;
+  else scaler = 0;
 }
 
 void doDelay()
