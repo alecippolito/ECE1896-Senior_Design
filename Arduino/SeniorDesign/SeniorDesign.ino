@@ -42,7 +42,7 @@ const int highFreq = 41;          // 24KHz square wave output for logical high
 const int lowFreq = 62;           // 16KHz square wave output for logical low
 
 // Receiver sampling votes:
-const int samplingVotes = 3;     // Number of times to sample receiver output to decide the current bit
+const int samplingVotes = 3;      // Number of times to sample receiver output to decide the current bit
 float votesStored = 0;            // Current value of all samples - averaged after final sample is taken 
 bool lastVote = false;            // Determines if sampling is complete
 
