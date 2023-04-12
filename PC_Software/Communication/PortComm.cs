@@ -70,9 +70,6 @@ namespace Communication
         */
         public void endTransmission()
         {
-            // for debug:
-            // String endVal = ((char)4).ToString();
-            // System.Console.WriteLine(endVal);
             _serialPort.Write(((char)4).ToString());
         }
         /*

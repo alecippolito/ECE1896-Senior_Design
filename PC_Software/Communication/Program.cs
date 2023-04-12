@@ -16,7 +16,16 @@ namespace Communication
     static class PortChat
     {
         static SerialPort _serialPort;
+        static SerialPort _serialPort0;
         public const int InfiniteTimeout = -1;
+        public enum SERIAL_CHARS : byte
+        {
+            MESSAGE_START = 1, // SOF
+            CHUNK_START = 2, // STX
+            CHUNK_END = 3, // ETX
+            MESSAGE_END = 4, // EOT
+            UNKNOWN = 255
+        }
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
@@ -28,47 +37,61 @@ namespace Communication
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new Form1());
             */
+            // Sending Port
             _serialPort = new SerialPort();
-            _serialPort.PortName = "COM9"; // CHANGE: to current com port
+            _serialPort.PortName = "COM11";
             _serialPort.BaudRate = 1200;
             _serialPort.Parity = Parity.None;
             _serialPort.DataBits = 8;
             _serialPort.StopBits = StopBits.One;
             _serialPort.Handshake = Handshake.None;
-            _serialPort.ReadTimeout = InfiniteTimeout;
-            _serialPort.WriteTimeout = InfiniteTimeout;
+            _serialPort.ReadTimeout = 1000; 
+            _serialPort.WriteTimeout = 1000; 
             _serialPort.Open();
-            string inFileName = @"C:\Users\ajipp\Desktop\in.txt"; // change to desired data to ssends
-            string outFileName = @"C:\Users\ajipp\Desktop\Downloads\"; // simulates the download folder on computer
+
+            
+            // Recieving Port
+            _serialPort0 = new SerialPort();
+            _serialPort0.PortName = "COM12";
+            _serialPort0.BaudRate = 1200;
+            _serialPort0.Parity = Parity.None;
+            _serialPort0.DataBits = 8;
+            _serialPort0.StopBits = StopBits.One;
+            _serialPort0.Handshake = Handshake.None;
+            _serialPort0.ReadTimeout = 10000;
+            _serialPort0.WriteTimeout = 10000;
+            _serialPort0.Open();
+            
 
 
-            // string inFileName = @"C:\Z\in.txt"; // change to desired data to ssends
-            // string outFileName = @"C:\Z\Downloads\"; // simulates the download folder on computer
+            string inFileName = @"C:\Users\ajipp\Desktop\in.txt";
+            string inFileName1 = @"C:\Users\ajipp\Desktop\notes.txt";
 
-            int maxBytesPerChunk = 1024; // change to chunk size you want
+            string outFile = @"C:\Users\ajipp\Desktop\Downloads\";
+
+
+
+            int maxBytesPerChunk = 1024;
 
             Stopwatch stopWatch = new Stopwatch();
             stopWatch.Start();
+            CancellationTokenSource tokenS = new CancellationTokenSource();
 
-            Task sendTask = Task.Factory.StartNew(() => SerialComms.Send(inFileName, _serialPort, maxBytesPerChunk));
+            Task recieveTask = Task.Factory.StartNew(() => SerialComms.RecieveMessages(outFile, _serialPort0 , tokenS.Token), tokenS.Token);
+
+            SerialComms.SendMessage(inFileName, _serialPort, maxBytesPerChunk);
+            // SerialComms.SendMessage(inFileName1, _serialPort, maxBytesPerChunk);
+
+
+            tokenS.Cancel();
+
             
-            Task receiveTask = Task.Factory.StartNew(() => SerialComms.Receive(outFileName, _serialPort));
-            Task.WaitAll(new[] { sendTask, receiveTask });
-            Task.WaitAll(new[] {receiveTask });
-            
-            
-            /*
-            
-            while (true) {
-                var val = _serialPort.ReadByte();
-                byte[] intBytes = BitConverter.GetBytes(val);
-                byte[] res = intBytes;
-                string result = System.Text.Encoding.UTF8.GetString(res);
-                Console.WriteLine(result);
-            }
-                 
-            */
-            
+
+
+
+
+
+
 
             stopWatch.Stop();
             TimeSpan ts = stopWatch.Elapsed;
