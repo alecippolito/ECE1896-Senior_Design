@@ -10,24 +10,25 @@
 // Functional value definitions/initializations:
 const int transmitterOut = 10,    // Define transmitter square wave out pin (needs to be PWM pin)
           receiverIn = A0,        // Define receiver signal in pin (needs to be ADC pin)
-          voltageLevel = 512;     // Define voltage threshold value (512 is ~2.5v)
+          voltageLevel = 471;     // Define voltage threshold value (512 is ~2.5v)
           
 const uint8_t startMessage = 65,  // Define messagestart byte
               endMessage = 67,    // Define message end byte
               startChunk = 2,     // Define chunk start byte
               endChunk = 3,       // Define chunk end byte
               comma = 1,          // Define comma bit for separating transmitted bytes
-              charDelay = 20;    // Define delay for each transmitted bit
+              charDelay = 20;     // Define delay for each transmitted bit
 
 uint8_t incoming = 0,             // 8-bit integer to store byte sent over serial for transmitting
         outgoing = 0,             // 8-bit integer to store reconstructed byte from received bits
         transmittedBits = 0,      // Number of bits transmitted in current byte
-        receivedBits = 0;         // Number of bits received in current byte
+        receivedBits = 0,         // Number of bits received in current byte
+        numExtraBits = 2;
 
 bool transmitFlag = false,        // Flag set by ISR to allow transmitter to send one bit
      receiveFlag = false,         // Flag set by ISR to allow receiver to receive one bit
      newTransmission = false,     // Flag set by receiving a serial byte to prevent reading and sending more than one byte at a time
-     newReception = false;        // Flag set by receiving either a 'comma' bit, or start byteto reconstruct bits into bytes
+     newReception = false;        // Flag set by receiving either a 'comma' bit, or start byte to reconstruct bits into bytes
 
 // Testing pin/value definitions:
 const int delayTime = 250,        // Delay time in milliseconds for artificially delaying transmitter bit output
@@ -38,8 +39,8 @@ const int delayTime = 250,        // Delay time in milliseconds for artificially
 const bool delayEnable = false;   // Enable transmitter bit delay to view square wave output
 
 // Hardware Timer 1 frequency values:
-const int highFreq = 41;          // 24KHz square wave output for logical high
-const int lowFreq = 62;           // 16KHz square wave output for logical low
+const int highFreq = 53;          // 19KHz square wave output for logical high
+const int lowFreq = 67;           // 15KHz square wave output for logical low
 
 // Receiver sampling votes:
 const int samplingVotes = 3;      // Number of times to sample receiver output to decide the current bit
@@ -47,7 +48,7 @@ float votesStored = 0;            // Current value of all samples - averaged aft
 bool lastVote = false;            // Determines if sampling is complete
 
 // Hardware Timer 2 frequency values:
-const int frequencyScaler = 0;    // divides interruptFreq by (frequencyScaler + 1) for effective bitrate
+const int frequencyScaler = 3;    // divides interruptFreq by (frequencyScaler + 1) for effective bitrate
 int scaler = 0;                   // Scaler iterator for stalling transmit/receive functions
 int interruptFreq = 8000;         // Frequency of hardware timer 2 - min of 6600 Hz for accurate data recovery
 
@@ -66,7 +67,7 @@ void setup()
   ITimer2.init();
   ITimer2.attachInterrupt(interruptFreq, interruptHandler);
 
-  Serial.begin(2400);
+  Serial.begin(1200);
 }
 
 void loop()
@@ -76,7 +77,14 @@ void loop()
   {
     incoming = Serial.read();
     newTransmission = true;
-  }
+  }//*/
+
+  /*if(!newTransmission && transmittedBits == 0)
+  {
+    incoming = 126;
+    newTransmission = true;
+    delay(1);
+  }//*/
 
   if(transmitFlag)
   {
@@ -115,16 +123,40 @@ void transmitBitExtraBit()
     transmittedBits = 0;
   }
 
-  if(newTransmission || transmittedBits < 1)
+  if(newTransmission || transmittedBits < numExtraBits)
   {
-    Timer1.setPeriod(highFreq);
-    Timer1.setPwmDuty(transmitterOut, 512);
+    if(numExtraBits == 1)
+    {
+      Timer1.setPeriod(highFreq);
+      Timer1.setPwmDuty(transmitterOut, 512);
 
-    digitalWrite(outputTest, true);
+      digitalWrite(outputTest, true);
 
-    doDelay();
+      doDelay();
+    }
+    else
+    {
+      if(transmittedBits == 0)
+      {
+        Timer1.setPeriod(highFreq);
+        Timer1.setPwmDuty(transmitterOut, 512);
+
+        digitalWrite(outputTest, true);
+
+        doDelay();
+      }
+      else
+      {
+        Timer1.setPeriod(lowFreq);
+        Timer1.setPwmDuty(transmitterOut, 512);
+
+        digitalWrite(outputTest, false);
+
+        doDelay();        
+      }
+    }
   }
-  else if (bitRead(incoming, transmittedBits-1) == 1)
+  else if (bitRead(incoming, transmittedBits-numExtraBits) == 1)
   {
     Timer1.setPeriod(highFreq);
     Timer1.setPwmDuty(transmitterOut, 512);
@@ -151,7 +183,7 @@ void transmitBitExtraBit()
     doDelay();
   }
 
-  if (transmittedBits < 8)
+  if (transmittedBits < (7 + numExtraBits))
   {
     newTransmission = false;
     transmittedBits++;
@@ -236,6 +268,7 @@ void transmitBitStartStop()
 /*/
 void receiveBitExtraBit(bool lastSample)
 {
+  delayMicroseconds(charDelay / 5);
   if(!newReception)
   {
     votesStored = observeAnalogPin();
@@ -396,7 +429,7 @@ void receiveBitStartStop(bool lastSample)
 
 int observeAnalogPin()
 {
-  if (analogRead(receiverIn) > voltageLevel)
+  if (analogRead(receiverIn) >= voltageLevel)
   {
     return 1;
   }
