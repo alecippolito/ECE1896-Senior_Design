@@ -68,7 +68,7 @@ void setup()
   ITimer2.init();
   ITimer2.attachInterrupt(interruptFreq, interruptHandler);
 
-  Serial.begin(1200);
+  Serial.begin(300);
 }
 
 void loop()
