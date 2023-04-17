@@ -11,13 +11,14 @@
 const int transmitterOut = 10,    // Define transmitter square wave out pin (needs to be PWM pin)
           receiverIn = A0,        // Define receiver signal in pin (needs to be ADC pin)
           voltageLevel = 471;     // Define voltage threshold value (512 is ~2.5v)
+          //voltageLevel = 512;
           
 const uint8_t startMessage = 65,  // Define messagestart byte
               endMessage = 67,    // Define message end byte
               startChunk = 2,     // Define chunk start byte
               endChunk = 3,       // Define chunk end byte
               comma = 1,          // Define comma bit for separating transmitted bytes
-              charDelay = 20;     // Define delay for each transmitted bit
+              charDelay = 12;     // Define delay for each transmitted bit
 
 uint8_t incoming = 0,             // 8-bit integer to store byte sent over serial for transmitting
         outgoing = 0,             // 8-bit integer to store reconstructed byte from received bits
@@ -43,14 +44,14 @@ const int highFreq = 53;          // 19KHz square wave output for logical high
 const int lowFreq = 67;           // 15KHz square wave output for logical low
 
 // Receiver sampling votes:
-const int samplingVotes = 3;      // Number of times to sample receiver output to decide the current bit
+const int samplingVotes = 1;      // Number of times to sample receiver output to decide the current bit
 float votesStored = 0;            // Current value of all samples - averaged after final sample is taken 
 bool lastVote = false;            // Determines if sampling is complete
 
 // Hardware Timer 2 frequency values:
-const int frequencyScaler = 3;    // divides interruptFreq by (frequencyScaler + 1) for effective bitrate
+const int frequencyScaler = 0;    // divides interruptFreq by (frequencyScaler + 1) for effective bitrate
 int scaler = 0;                   // Scaler iterator for stalling transmit/receive functions
-int interruptFreq = 8000;         // Frequency of hardware timer 2 - min of 6600 Hz for accurate data recovery
+int interruptFreq = 12000;         // Frequency of hardware timer 2 - min of 6600 Hz for accurate data recovery
 
 void setup()
 {
@@ -79,12 +80,7 @@ void loop()
     newTransmission = true;
   }//*/
 
-  /*if(!newTransmission && transmittedBits == 0)
-  {
-    incoming = 126;
-    newTransmission = true;
-    delay(1);
-  }//*/
+  delayMicroseconds(charDelay);
 
   if(transmitFlag)
   {
@@ -92,6 +88,8 @@ void loop()
     //transmitBitStartStop();
     transmitFlag = false;
   }
+
+  delayMicroseconds(charDelay);
 
   if(receiveFlag)
   {
@@ -112,7 +110,6 @@ void loop()
 /*/
 void transmitBitExtraBit()
 {
-  delayMicroseconds(charDelay);
   if(incoming == 0)
   {
     return;
@@ -125,7 +122,7 @@ void transmitBitExtraBit()
 
   if(newTransmission || transmittedBits < numExtraBits)
   {
-    if(numExtraBits == 1)
+    if(transmittedBits < (numExtraBits - 1))
     {
       Timer1.setPeriod(highFreq);
       Timer1.setPwmDuty(transmitterOut, 512);
@@ -136,24 +133,12 @@ void transmitBitExtraBit()
     }
     else
     {
-      if(transmittedBits == 0)
-      {
-        Timer1.setPeriod(highFreq);
-        Timer1.setPwmDuty(transmitterOut, 512);
+      Timer1.setPeriod(lowFreq);
+      Timer1.setPwmDuty(transmitterOut, 512);
 
-        digitalWrite(outputTest, true);
+      digitalWrite(outputTest, false);
 
-        doDelay();
-      }
-      else
-      {
-        Timer1.setPeriod(lowFreq);
-        Timer1.setPwmDuty(transmitterOut, 512);
-
-        digitalWrite(outputTest, false);
-
-        doDelay();        
-      }
+      doDelay();
     }
   }
   else if (bitRead(incoming, transmittedBits-numExtraBits) == 1)
@@ -268,7 +253,6 @@ void transmitBitStartStop()
 /*/
 void receiveBitExtraBit(bool lastSample)
 {
-  delayMicroseconds(charDelay / 5);
   if(!newReception)
   {
     votesStored = observeAnalogPin();
@@ -321,6 +305,8 @@ void receiveBitExtraBit(bool lastSample)
 
   if(outgoing == comma && !newReception)
   {
+    delayMicroseconds(charDelay);
+
     newReception = true;
     receivedBits = 0;
     outgoing = 0;
