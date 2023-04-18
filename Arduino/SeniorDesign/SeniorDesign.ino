@@ -24,7 +24,7 @@ uint8_t incoming = 0,             // 8-bit integer to store byte sent over seria
         outgoing = 0,             // 8-bit integer to store reconstructed byte from received bits
         transmittedBits = 0,      // Number of bits transmitted in current byte
         receivedBits = 0,         // Number of bits received in current byte
-        numExtraBits = 2;
+        numExtraBits = 1;
 
 bool transmitFlag = false,        // Flag set by ISR to allow transmitter to send one bit
      receiveFlag = false,         // Flag set by ISR to allow receiver to receive one bit
@@ -51,7 +51,7 @@ bool lastVote = false;            // Determines if sampling is complete
 // Hardware Timer 2 frequency values:
 const int frequencyScaler = 0;    // divides interruptFreq by (frequencyScaler + 1) for effective bitrate
 int scaler = 0;                   // Scaler iterator for stalling transmit/receive functions
-int interruptFreq = 12000;         // Frequency of hardware timer 2 - min of 6600 Hz for accurate data recovery
+int interruptFreq = 100;         // Frequency of hardware timer 2 - min of 6600 Hz for accurate data recovery
 
 void setup()
 {
@@ -68,7 +68,7 @@ void setup()
   ITimer2.init();
   ITimer2.attachInterrupt(interruptFreq, interruptHandler);
 
-  Serial.begin(300);
+  Serial.begin(1200);
 }
 
 void loop()
@@ -122,7 +122,13 @@ void transmitBitExtraBit()
 
   if(newTransmission || transmittedBits < numExtraBits)
   {
-    if(transmittedBits < (numExtraBits - 1))
+    Timer1.setPeriod(highFreq);
+    Timer1.setPwmDuty(transmitterOut, 512);
+
+    digitalWrite(outputTest, true);
+
+    doDelay();
+    /*if(transmittedBits < (numExtraBits - 1))
     {
       Timer1.setPeriod(highFreq);
       Timer1.setPwmDuty(transmitterOut, 512);
@@ -139,7 +145,7 @@ void transmitBitExtraBit()
       digitalWrite(outputTest, false);
 
       doDelay();
-    }
+    }//*/
   }
   else if (bitRead(incoming, transmittedBits-numExtraBits) == 1)
   {
@@ -306,6 +312,7 @@ void receiveBitExtraBit(bool lastSample)
   if(outgoing == comma && !newReception)
   {
     delayMicroseconds(charDelay);
+    Serial.write(240);
 
     newReception = true;
     receivedBits = 0;
@@ -313,12 +320,13 @@ void receiveBitExtraBit(bool lastSample)
   }
   else if(newReception)
   {
+    Serial.write(carry);
     if (receivedBits < 7) receivedBits++;
     else
     {
       if(outgoing != 0)
       {
-        Serial.write(outgoing >> 1);
+        Serial.write(outgoing);
       }
 
       newReception = false;
