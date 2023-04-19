@@ -10,7 +10,7 @@
 // Functional value definitions/initializations:
 const int transmitterOut = 10,    // Define transmitter square wave out pin (needs to be PWM pin)
           receiverIn = A0,        // Define receiver signal in pin (needs to be ADC pin)
-          voltageLevel = 471;     // Define voltage threshold value (512 is ~2.5v)
+          voltageLevel = 410;     // Define voltage threshold value (512 is ~2.5v)
           //voltageLevel = 512;
           
 const uint8_t startMessage = 65,  // Define messagestart byte
@@ -18,13 +18,13 @@ const uint8_t startMessage = 65,  // Define messagestart byte
               startChunk = 2,     // Define chunk start byte
               endChunk = 3,       // Define chunk end byte
               comma = 1,          // Define comma bit for separating transmitted bytes
-              charDelay = 12;     // Define delay for each transmitted bit
+              charDelay = 5;     // Define delay for each transmitted bit
 
 uint8_t incoming = 0,             // 8-bit integer to store byte sent over serial for transmitting
         outgoing = 0,             // 8-bit integer to store reconstructed byte from received bits
         transmittedBits = 0,      // Number of bits transmitted in current byte
         receivedBits = 0,         // Number of bits received in current byte
-        numExtraBits = 1;
+        numExtraBits = 2;
 
 bool transmitFlag = false,        // Flag set by ISR to allow transmitter to send one bit
      receiveFlag = false,         // Flag set by ISR to allow receiver to receive one bit
@@ -37,7 +37,8 @@ const int delayTime = 250,        // Delay time in milliseconds for artificially
           led = 8,                // LED output for signaling transmitter bit delay over
           errorChance = 1;        // Percentage of bits artificially flipped
           
-const bool delayEnable = false;   // Enable transmitter bit delay to view square wave output
+const bool delayEnable = false,   // Enable transmitter bit delay to view square wave output
+           printBits = false;
 
 // Hardware Timer 1 frequency values:
 const int highFreq = 53;          // 19KHz square wave output for logical high
@@ -51,7 +52,10 @@ bool lastVote = false;            // Determines if sampling is complete
 // Hardware Timer 2 frequency values:
 const int frequencyScaler = 0;    // divides interruptFreq by (frequencyScaler + 1) for effective bitrate
 int scaler = 0;                   // Scaler iterator for stalling transmit/receive functions
-int interruptFreq = 100;         // Frequency of hardware timer 2 - min of 6600 Hz for accurate data recovery
+int interruptFreq = 1600;         // Frequency of hardware timer 2 - min of 6600 Hz for accurate data recovery
+
+int backDelay = 0;
+int frontDelay = 460;
 
 void setup()
 {
@@ -80,36 +84,49 @@ void loop()
     newTransmission = true;
   }//*/
 
-  delayMicroseconds(charDelay);
-
   if(transmitFlag)
   {
+
     transmitBitExtraBit();
     //transmitBitStartStop();
     transmitFlag = false;
   }
 
-  delayMicroseconds(charDelay);
-
-  if(receiveFlag)
+  if(receiveFlag && newReception)
   {
-    for(int i = 0; i < samplingVotes; i++)
-    {
-      lastVote = i == (samplingVotes - 1) ? true : false;
-      receiveBitExtraBit(lastVote);
-      //receiveBitStartStop(lastVote);
-    }
+    receiveBitExtraBit();
+    //receiveBitStartStop();
     receiveFlag = false;
+  }
+
+  if(!newReception) detectStartBit();
+}
+
+/*/
+ *  Detects start bit, and allows receive function to collect bits into a byte.
+ *  Intended to synchronize bit collection, so that bytes are combined accurately.
+/*/
+void detectStartBit()
+{
+  if(observeAnalogPin() == 1)
+  {
+    ITimer2.detachInterrupt();
+    newReception = true;
+
+    if(printBits) Serial.write(240);
+    delayMicroseconds(frontDelay);
+    ITimer2.attachInterrupt(interruptFreq, interruptHandler);
   }
 }
 
 /*/  
  *  Breaks down incoming serial bytes and transmits bits one at a time by sending them as 24kHz square wave for 1, 16kHz square wave for 0.
  *  To differentiate bytes on the receiver end, adds one extra bit to the front of every byte.
- *  This increases the number of bits required to transmit messages by 1.125, which is not ideal.
+ *  This increases the number of bits required to transmit messages by 1.125.
 /*/
 void transmitBitExtraBit()
 {
+  //delayMicroseconds(charDelay);
   if(incoming == 0)
   {
     return;
@@ -122,15 +139,9 @@ void transmitBitExtraBit()
 
   if(newTransmission || transmittedBits < numExtraBits)
   {
-    Timer1.setPeriod(highFreq);
-    Timer1.setPwmDuty(transmitterOut, 512);
-
-    digitalWrite(outputTest, true);
-
-    doDelay();
-    /*if(transmittedBits < (numExtraBits - 1))
+    if(transmittedBits % 2 == 0)
     {
-      Timer1.setPeriod(highFreq);
+      Timer1.setPeriod(lowFreq);
       Timer1.setPwmDuty(transmitterOut, 512);
 
       digitalWrite(outputTest, true);
@@ -139,13 +150,13 @@ void transmitBitExtraBit()
     }
     else
     {
-      Timer1.setPeriod(lowFreq);
+      Timer1.setPeriod(highFreq);
       Timer1.setPwmDuty(transmitterOut, 512);
 
-      digitalWrite(outputTest, false);
+      digitalWrite(outputTest, true);
 
       doDelay();
-    }//*/
+    }
   }
   else if (bitRead(incoming, transmittedBits-numExtraBits) == 1)
   {
@@ -257,82 +268,47 @@ void transmitBitStartStop()
  *  While the 'start' bit has not been found, the receiver is always checking for start bits - if 0 is received instead, repeat.
  *  
 /*/
-void receiveBitExtraBit(bool lastSample)
+void receiveBitExtraBit()
 {
-  if(!newReception)
-  {
-    votesStored = observeAnalogPin();
-  }
-  else if(!lastSample && newReception)
+  //delayMicroseconds(charDelay);
+  for(int i = 0; i < samplingVotes; i++)
   {
     votesStored += observeAnalogPin();
-    return;
   }
-  else if(newReception)
-  {
-    votesStored += observeAnalogPin();
-    votesStored /= samplingVotes;
-  }
+  
+  votesStored /= samplingVotes;
 
   uint8_t carry;
 
-  if(!newReception)
+  if(votesStored > 0.5)
   {
-    if(votesStored > 0.5)
-    {
-      carry = 1;
-      outgoing <<= 1;
-      outgoing += carry;
-    }
-    else
-    {
-      carry = 0;
-      outgoing <<= 1;
-      outgoing += carry;
-    } 
+    carry = 1;
+    //if(random(0,99) < errorChance) carry = 0;
+    outgoing |= carry << receivedBits;
   }
   else
   {
-    if(votesStored > 0.5)
-    {
-      carry = 1;
-      //if(random(0,99) < errorChance) carry = 0;
-      outgoing |= carry << receivedBits;
-    }
-    else
-    {
-      carry = 0;
-      //if(random(0,99) < errorChance) carry = 1;
-      outgoing |= carry << receivedBits;
-    }
+    carry = 0;
+    //if(random(0,99) < errorChance) carry = 1;
+    outgoing |= carry << receivedBits;
   }
 
   votesStored = 0;
 
-  if(outgoing == comma && !newReception)
+  if(printBits) Serial.write(carry);
+  if (receivedBits < 7) receivedBits++;
+  else
   {
-    delayMicroseconds(charDelay);
-    Serial.write(240);
+    if(outgoing != 0)
+    {
+      Serial.write(outgoing);
+    }
 
-    newReception = true;
+    newReception = false;
     receivedBits = 0;
     outgoing = 0;
-  }
-  else if(newReception)
-  {
-    Serial.write(carry);
-    if (receivedBits < 7) receivedBits++;
-    else
-    {
-      if(outgoing != 0)
-      {
-        Serial.write(outgoing);
-      }
 
-      newReception = false;
-      receivedBits = 0;
-      outgoing = 0;
-    }    
+    delayMicroseconds(backDelay);
   }
 }
 
